@@ -45,10 +45,6 @@ sudo install_name_tool -change \
 	../../Frameworks/Chromium\ Embedded\ Framework.framework/Chromium\ Embedded\ Framework \
 	OBS.app/Contents/Resources/obs-plugins/obs-browser-page
 
-# Package app
-hr "Generating .pkg"
-packagesbuild ../CI/install/osx/CMakeLists.pkgproj
-
 # Signing stuff
 hr "Decrypting Cert"
 openssl aes-256-cbc -K $encrypted_dd3c7f5e9db9_key -iv $encrypted_dd3c7f5e9db9_iv -in ../CI/osxcert/Certificates.p12.enc -out Certificates.p12 -d
@@ -58,9 +54,20 @@ security default-keychain -s build.keychain
 security unlock-keychain -p mysecretpassword build.keychain
 security set-keychain-settings -t 3600 -u build.keychain
 hr "Importing certs into keychain"
-security import ./Certificates.p12 -k build.keychain -T /usr/bin/productsign -P ""
+security import ./Certificates.p12 -k build.keychain -T /usr/bin/productsign -T /usr/bin/codesign -P ""
 # macOS 10.12+
 security set-key-partition-list -S apple-tool:,apple: -s -k mysecretpassword build.keychain
+
+security find-identity
+
+codesign -s "Developer ID Application: Hugh Bailey (2MMRE5MTB8)" OBS.app/Contents/Frameworks/Sparkle.framework/
+codesign -s "Developer ID Application: Hugh Bailey (2MMRE5MTB8)" OBS.app/Contents/Frameworks/Chromium Embedded Framework.framework/
+codesign -s "Developer ID Application: Hugh Bailey (2MMRE5MTB8)" OBS.app
+
+# Package app
+hr "Generating .pkg"
+packagesbuild ../CI/install/osx/CMakeLists.pkgproj
+
 hr "Signing Package"
 productsign --sign 2MMRE5MTB8 ./OBS.pkg ./$FILENAME
 
