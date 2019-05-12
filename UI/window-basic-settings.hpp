@@ -290,6 +290,7 @@ private:
 
 	bool IsZixiPluginLoaded();
 	void DisableZixiControls(bool);
+	void populateZixiCombos();
 private slots:
 	void on_theme_activated(int idx);
 

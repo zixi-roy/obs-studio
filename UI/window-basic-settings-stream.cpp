@@ -55,18 +55,41 @@ void OBSBasicSettings::InitStreamPage()
 	LoadServices(false);
 
 	connect(ui->service, SIGNAL(currentIndexChanged(int)),
-			this, SLOT(UpdateServerList()));
+		this, SLOT(UpdateServerList()));
 	connect(ui->service, SIGNAL(currentIndexChanged(int)),
-			this, SLOT(UpdateKeyLink()));
+		this, SLOT(UpdateKeyLink()));
 
 	bool disableAllZixiControls = false;
 #ifdef ENABLE_ZIXI_SUPPORT
 	disableAllZixiControls = !IsZixiPluginLoaded();
+
+	if (!disableAllZixiControls) {
+		populateZixiCombos();
+	}
 #else
 	disableAllZixiControls = true;
 #endif
 
 	DisableZixiControls(disableAllZixiControls);
+}
+
+void OBSBasicSettings::populateZixiCombos()
+{
+	obs_properties_t * zixi_props = obs_get_output_properties("zixi_output");
+	obs_property_t* latencies = obs_properties_get(zixi_props, "latencies");
+	obs_property_t* encryptions = obs_properties_get(zixi_props, "encryptions");
+
+	int	latencies_count = obs_property_list_item_count(latencies);
+	for (int iter = 0; iter < latencies_count; ++iter) {
+		const char * name = obs_property_list_item_name(latencies, iter);
+		ui->zixiFwdLatency->addItem(name, iter);
+	}
+
+	int	encryptions_count = obs_property_list_item_count(encryptions);
+	for (int iter = 0; iter < encryptions_count; ++iter) {
+		const char * name = obs_property_list_item_name(encryptions, iter);
+		ui->zixiFwdEncryptionType->addItem(name, iter);
+	}
 }
 
 bool OBSBasicSettings::IsZixiPluginLoaded()
