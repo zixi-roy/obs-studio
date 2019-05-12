@@ -241,6 +241,9 @@ private slots:
 	void on_disconnectAccount_clicked();
 	void on_useStreamKey_clicked();
 	void on_useAuth_toggled();
+
+	void on_zixiFwdEncryptionType_currentIndexChanged(int idx);
+	void on_zixiFwd_toggled();
 private:
 
 	/* output */
@@ -285,6 +288,7 @@ private:
 
 	void RecalcOutputResPixels(const char *resText);
 
+	void DisableZixiControls(bool);
 private slots:
 	void on_theme_activated(int idx);
 

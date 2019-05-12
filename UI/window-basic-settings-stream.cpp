@@ -58,6 +58,64 @@ void OBSBasicSettings::InitStreamPage()
 			this, SLOT(UpdateServerList()));
 	connect(ui->service, SIGNAL(currentIndexChanged(int)),
 			this, SLOT(UpdateKeyLink()));
+
+	bool disableAllZixiControls = false;
+#ifdef ENABLE_ZIXI_SUPPORT
+	
+#else
+	disableAllZixiControls = true;
+#endif
+
+	DisableZixiControls(disableAllZixiControls);
+}
+
+void OBSBasicSettings::on_zixiFwd_toggled()
+{
+	bool fwd = ui->zixiFwd->isChecked();
+	ui->zixiFwdVersion->setVisible(fwd);
+	ui->zixiFwdVersionLabel->setVisible(fwd);
+	ui->zixiFwdUrl->setVisible(fwd);
+	ui->zixiFwdUrlLabel->setVisible(fwd);
+	ui->zixiFwdPassword->setVisible(fwd);
+	ui->zixiFwdPasswordLabel->setVisible(fwd);
+	ui->zixiFwdPasswordShow->setVisible(fwd);
+	ui->zixiFwdLatencyLabel->setVisible(fwd);
+	ui->zixiFwdLatency->setVisible(fwd);
+	ui->zixiFwdEncryptionType->setVisible(fwd);
+	ui->zixiFwdEncryptionTypeLabel->setVisible(fwd);
+	
+	ui->zixiFwdEnableBonding->setVisible(fwd);
+	ui->zixiFwdEncoderFeedback->setVisible(fwd);
+}
+
+void OBSBasicSettings::on_zixiFwdEncryptionType_currentIndexChanged(int idx)
+{
+	bool show_key = idx != 3 && ui->zixiFwd->isVisible();
+	ui->zixiFwdEncryptionKey->setVisible(show_key);
+	ui->zixiFwdEncryptionKeyShow->setVisible(show_key);
+	ui->zixiFwdEncryptionKeyLabel->setVisible(show_key);
+}
+
+void OBSBasicSettings::DisableZixiControls(bool disable_all)
+{
+	ui->zixiFwd->setVisible(!disable_all);
+	ui->zixiFwdVersion->setVisible(false);
+	ui->zixiFwdVersionLabel->setVisible(false);
+	ui->zixiFwdUrl->setVisible(false);
+	ui->zixiFwdUrlLabel->setVisible(false);
+	ui->zixiFwdPassword->setVisible(false);
+	ui->zixiFwdPasswordLabel->setVisible(false);
+	ui->zixiFwdPasswordShow->setVisible(false);
+	ui->zixiFwdLatencyLabel->setVisible(false);
+	ui->zixiFwdLatency->setVisible(false);
+	ui->zixiFwdEncryptionType->setVisible(false);
+	ui->zixiFwdEncryptionTypeLabel->setVisible(false);
+	ui->zixiFwdEncryptionKey->setVisible(false);
+	ui->zixiFwdEncryptionKeyShow->setVisible(false);
+	ui->zixiFwdEncryptionKeyLabel->setVisible(false);
+	ui->zixiFwdEnableBonding->setVisible(false);
+	ui->zixiFwdEncoderFeedback->setVisible(false);
+	on_zixiFwdEncryptionType_currentIndexChanged(ui->zixiFwdEncryptionType->currentIndex());
 }
 
 void OBSBasicSettings::LoadStream1Settings()
