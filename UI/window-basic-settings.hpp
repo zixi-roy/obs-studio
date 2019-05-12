@@ -288,6 +288,7 @@ private:
 
 	void RecalcOutputResPixels(const char *resText);
 
+	bool IsZixiPluginLoaded();
 	void DisableZixiControls(bool);
 private slots:
 	void on_theme_activated(int idx);

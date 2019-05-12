@@ -1165,7 +1165,11 @@
               </widget>
              </item>
              <item row="9" column="1">
-              <widget class="QLineEdit" name="zixiFwdVersion"/>
+              <widget class="QLineEdit" name="zixiFwdVersion">
+               <property name="enabled">
+                <bool>false</bool>
+               </property>
+              </widget>
              </item>
              <item row="10" column="0">
               <widget class="QLabel" name="zixiFwdUrlLabel">
@@ -3763,8 +3767,8 @@
              <rect>
               <x>0</x>
               <y>0</y>
-              <width>594</width>
-              <height>807</height>
+              <width>555</width>
+              <height>469</height>
              </rect>
             </property>
             <layout class="QVBoxLayout" name="verticalLayout_50">
