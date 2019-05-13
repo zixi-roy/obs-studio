@@ -4,6 +4,8 @@ struct rtmp_custom {
 	char *server, *key;
 	bool use_auth;
 	char *username, *password;
+
+	bool zixi_fwd;
 };
 
 static const char *rtmp_custom_name(void *unused)
@@ -18,12 +20,15 @@ static void rtmp_custom_update(void *data, obs_data_t *settings)
 
 	bfree(service->server);
 	bfree(service->key);
+	bfree(service->username);
+	bfree(service->password);
 
 	service->server = bstrdup(obs_data_get_string(settings, "server"));
 	service->key    = bstrdup(obs_data_get_string(settings, "key"));
 	service->use_auth = obs_data_get_bool(settings, "use_auth");
 	service->username = bstrdup(obs_data_get_string(settings, "username"));
 	service->password = bstrdup(obs_data_get_string(settings, "password"));
+	service->zixi_fwd = obs_data_get_bool(settings, "zixi_fwd");
 }
 
 static void rtmp_custom_destroy(void *data)
@@ -56,7 +61,6 @@ static bool use_auth_modified(obs_properties_t *ppts, obs_property_t *p,
 	obs_property_set_visible(p, use_auth);
 	return true;
 }
-
 static obs_properties_t *rtmp_custom_properties(void *unused)
 {
 	UNUSED_PARAMETER(unused);
@@ -75,6 +79,9 @@ static obs_properties_t *rtmp_custom_properties(void *unused)
 	obs_properties_add_text(ppts, "password", obs_module_text("Password"),
 			OBS_TEXT_PASSWORD);
 	obs_property_set_modified_callback(p, use_auth_modified);
+
+	p = obs_properties_add_bool(ppts, "zixi_fwd", obs_module_text("ZixiFwd"));
+	
 	return ppts;
 }
 
@@ -106,15 +113,32 @@ static const char *rtmp_custom_password(void *data)
 	return service->password;
 }
 
+static const char * rtmp_custom_get_output_type(void *data) {
+#ifndef ENABLE_ZIXI_SUPPORT
+	UNUSED_PARAMETER(data);
+#else
+	struct rtmp_custom* service = data;
+#endif
+	const char* ret = NULL;
+
+#ifdef ENABLE_ZIXI_SUPPORT
+	if (service->zixi_fwd) {
+		ret = "zixi_output";
+	}
+#endif
+	return ret;
+}
+
 struct obs_service_info rtmp_custom_service = {
-	.id             = "rtmp_custom",
-	.get_name       = rtmp_custom_name,
-	.create         = rtmp_custom_create,
-	.destroy        = rtmp_custom_destroy,
-	.update         = rtmp_custom_update,
-	.get_properties = rtmp_custom_properties,
-	.get_url        = rtmp_custom_url,
-	.get_key        = rtmp_custom_key,
-	.get_username   = rtmp_custom_username,
-	.get_password   = rtmp_custom_password
+	.id              = "rtmp_custom",
+	.get_name        = rtmp_custom_name,
+	.create          = rtmp_custom_create,
+	.destroy         = rtmp_custom_destroy,
+	.update          = rtmp_custom_update,
+	.get_properties  = rtmp_custom_properties,
+	.get_url         = rtmp_custom_url,
+	.get_key         = rtmp_custom_key,
+	.get_username    = rtmp_custom_username,
+	.get_password    = rtmp_custom_password,
+	.get_output_type = rtmp_custom_get_output_type
 };

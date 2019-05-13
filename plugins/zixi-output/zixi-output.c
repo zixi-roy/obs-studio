@@ -383,7 +383,6 @@ static void zixi_log_callback(void * user_data, int level, const char * what) {
 
 static bool init_connect(struct zixi_stream* stream) {
 	obs_service_t *service;
-	obs_data_t *settings;
 	info("zixi_init_connect");
 	if (stopping(stream)){
 		debug("zixi_init_connect need to join send_thread");
@@ -393,38 +392,12 @@ static bool init_connect(struct zixi_stream* stream) {
 
 	free_packets(stream);
 
-	service = obs_output_get_service(stream->output);
-	if (!service){
-		warn("zixi_init_connect failed to get service");
-		return false;
-	}
-
-	settings = obs_service_get_settings(service);
-	stream->bonding = obs_data_get_bool(settings, ZIXI_SERVICE_PROP_ENABLE_BONDING);
-	info("zixi-output: bonding from service %s",  stream->bonding ? "bonding on": "bonding off");
-	
 	os_atomic_set_bool(&stream->disconnected, false);
 	stream->total_bytes_sent = 0;
 	stream->dropped_frames = 0;
 	stream->min_drop_dts_usec = 0;
 	stream->min_priority = 0;
 
-	dstr_copy(&stream->url, obs_data_get_string(settings, ZIXI_SERVICE_PROP_URL));
-	dstr_copy(&stream->password, obs_data_get_string(settings, ZIXI_SERVICE_PROP_PASSWORD));
-	stream->latency_id = zixi_convert_latency(obs_data_get_int(settings, ZIXI_SERVICE_PROP_LATENCY_ID));
-	stream->encryption_type = zixi_convert_encryption(obs_data_get_int(settings, ZIXI_SERVICE_PROP_ENCRYPTION_TYPE));
-	if ( stream->encryption_type != 3)
-		dstr_copy(&stream->key, obs_data_get_string(settings, ZIXI_SERVICE_PROP_ENCRYPTION_KEY));
-		
-	stream->use_auto_rtmp = obs_data_get_bool(settings, ZIXI_SERVICE_PROP_USE_AUTO_RTMP_OUT);
-	if (stream->use_auto_rtmp) {
-		dstr_copy(&stream->auto_rtmp_url, obs_data_get_string(settings, ZIXI_SERVICE_PROP_AUTO_RTMP_URL));
-		dstr_copy(&stream->auto_rtmp_username, obs_data_get_string(settings, ZIXI_SERVICE_PROP_AUTO_RTMP_USERNAME));
-		dstr_copy(&stream->auto_rtmp_password, obs_data_get_string(settings, ZIXI_SERVICE_PROP_AUTO_RTMP_PASSWORD));
-		dstr_copy(&stream->auto_rtmp_channel, obs_data_get_string(settings, ZIXI_SERVICE_PROP_AUTO_RTMP_CHANNEL));
-	}
-
-	obs_data_release(settings);
 	info("zixi_init_connect done");
 	return true;
 }
@@ -634,7 +607,6 @@ static int try_connect(struct zixi_stream* stream) {
 	stream->feeder_functions.zixi_configure_logging(0, zixi_log_callback, NULL);
 	int zixi_ret = -1;
 
-	stream->use_auto_rtmp = false;
 	if (stream->use_auto_rtmp) {
 		zixi_rtmp_out_config rtmp_cfg = { 0 };
 		rtmp_cfg.max_va_diff = 10000;
@@ -1163,7 +1135,31 @@ static float zixi_get_congestion(void *data){
 }
 
 void zixi_output_update(void *data, obs_data_t *settings) {
+	struct zixi_stream* stream = data;
+	struct obs_service_t* service = obs_output_get_service(stream->output);
+	settings = obs_service_get_settings(service);
 
+	const char * service_name = obs_service_get_name(service);
+	stream->bonding = obs_data_get_bool(settings, ZIXI_SERVICE_PROP_ENABLE_BONDING);
+
+	dstr_copy(&stream->url, obs_data_get_string(settings, ZIXI_SERVICE_PROP_URL));
+	dstr_copy(&stream->password, obs_data_get_string(settings, ZIXI_SERVICE_PROP_PASSWORD));
+	stream->latency_id = zixi_convert_latency(obs_data_get_int(settings, ZIXI_SERVICE_PROP_LATENCY_ID));
+	stream->encryption_type = zixi_convert_encryption(obs_data_get_int(settings, ZIXI_SERVICE_PROP_ENCRYPTION_TYPE));
+	if (stream->encryption_type != ZIXI_NO_ENCRYPTION)
+		dstr_copy(&stream->key, obs_data_get_string(settings, ZIXI_SERVICE_PROP_ENCRYPTION_KEY));
+
+
+	stream->use_auto_rtmp = obs_data_get_bool(settings, "zixi_fwd");
+	if (stream->use_auto_rtmp) {
+		dstr_copy(&stream->auto_rtmp_url, obs_data_get_string(settings, "server"));
+		dstr_copy(&stream->auto_rtmp_username, obs_data_get_string(settings, "username"));
+		dstr_copy(&stream->auto_rtmp_password, obs_data_get_string(settings, "password"));
+		dstr_copy(&stream->auto_rtmp_channel, obs_data_get_string(settings, "key"));
+	}
+
+
+	obs_data_release(settings);
 }
 
 struct obs_output_info zixi_output = {
