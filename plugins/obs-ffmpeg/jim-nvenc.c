@@ -342,6 +342,7 @@ static bool init_encoder(struct nvenc_data *enc, obs_data_t *settings)
 	bool lookahead = obs_data_get_bool(settings, "lookahead");
 	int bf = (int)obs_data_get_int(settings, "bf");
 	bool vbr = astrcmpi(rc, "VBR") == 0;
+	bool repeat_headers = obs_data_get_bool(settings, "repeat_headers");
 	NVENCSTATUS err;
 
 	video_t *video = obs_encoder_video(enc->encoder);
@@ -499,6 +500,11 @@ static bool init_encoder(struct nvenc_data *enc, obs_data_t *settings)
 	} else {
 		config->profileGUID = NV_ENC_H264_PROFILE_HIGH_GUID;
 	}
+
+	/* -------------------------- */
+	/* repeat headers	      */
+	if (repeat_headers)
+		h264_config->repeatSPSPPS = 1;
 
 	/* -------------------------- */
 	/* initialize                 */

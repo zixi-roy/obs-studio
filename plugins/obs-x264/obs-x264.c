@@ -409,15 +409,16 @@ static void update_params(struct obs_x264 *obsx264, obs_data_t *settings,
 
 	const char *rate_control = obs_data_get_string(settings, "rate_control");
 
-	int bitrate      = (int)obs_data_get_int(settings, "bitrate");
-	int buffer_size  = (int)obs_data_get_int(settings, "buffer_size");
-	int keyint_sec   = (int)obs_data_get_int(settings, "keyint_sec");
-	int crf          = (int)obs_data_get_int(settings, "crf");
-	int width        = (int)obs_encoder_get_width(obsx264->encoder);
-	int height       = (int)obs_encoder_get_height(obsx264->encoder);
-	int bf           = (int)obs_data_get_int(settings, "bf");
-	bool use_bufsize = obs_data_get_bool(settings, "use_bufsize");
-	bool cbr_override= obs_data_get_bool(settings, "cbr");
+	int bitrate		= (int)obs_data_get_int(settings, "bitrate");
+	int buffer_size		= (int)obs_data_get_int(settings, "buffer_size");
+	int keyint_sec		= (int)obs_data_get_int(settings, "keyint_sec");
+	int crf			= (int)obs_data_get_int(settings, "crf");
+	int width		= (int)obs_encoder_get_width(obsx264->encoder);
+	int height		= (int)obs_encoder_get_height(obsx264->encoder);
+	int bf			= (int)obs_data_get_int(settings, "bf");
+	bool use_bufsize	= obs_data_get_bool(settings, "use_bufsize");
+	bool cbr_override	= obs_data_get_bool(settings, "cbr");
+	bool repeat_headers	= obs_data_get_bool(settings, "repeat_headers");
 	enum rate_control rc;
 
 #ifdef ENABLE_VFR
@@ -513,6 +514,8 @@ static void update_params(struct obs_x264 *obsx264, obs_data_t *settings,
 	else
 		obsx264->params.i_csp = X264_CSP_NV12;
 
+	obsx264->params.b_repeat_headers = repeat_headers;
+
 	while (*params)
 		set_param(obsx264, *(params++));
 
@@ -525,14 +528,17 @@ static void update_params(struct obs_x264 *obsx264, obs_data_t *settings,
 	     "\tfps_den:      %d\n"
 	     "\twidth:        %d\n"
 	     "\theight:       %d\n"
-	     "\tkeyint:       %d\n",
+	     "\tkeyint:       %d\n"
+	     "\trepeat headers:%d\n",
+
 	     rate_control,
 	     obsx264->params.rc.i_vbv_max_bitrate,
 	     obsx264->params.rc.i_vbv_buffer_size,
 	     (int)obsx264->params.rc.f_rf_constant,
 	     voi->fps_num, voi->fps_den,
 	     width, height,
-	     obsx264->params.i_keyint_max);
+	     obsx264->params.i_keyint_max,
+		repeat_headers?1:0);
 }
 
 static bool update_settings(struct obs_x264 *obsx264, obs_data_t *settings)
@@ -569,7 +575,6 @@ static bool update_settings(struct obs_x264 *obsx264, obs_data_t *settings)
 			apply_x264_profile(obsx264, profile);
 	}
 
-	obsx264->params.b_repeat_headers = false;
 
 	strlist_free(paramlist);
 	bfree(preset);

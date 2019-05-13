@@ -849,6 +849,7 @@ static bool zixi_set_encoder_params(obs_output_t* output, unsigned int * vbitrat
 			local_max_vbitrate = 1.5 * local_vbitrate;
 		}
 	} else {
+		obs_data_set_bool(settings, "repeat_headers", true);
 		local_vbitrate = obs_data_get_int(settings, "bitrate") * 1000;
 		local_max_vbitrate = obs_data_get_int(settings, "max_bitrate") * 1000;
 		if (local_max_vbitrate < (1.5 * local_vbitrate)) {
