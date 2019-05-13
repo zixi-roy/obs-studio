@@ -13,6 +13,7 @@
 	blog(level, "[zixi stream: '%s'] " format, \
 			obs_output_get_name(stream->output), ##__VA_ARGS__)
 
+#define err(format, ...) do_log(LOG_ERROR, format, ##__VA_ARGS__)
 #define warn(format, ...)  do_log(LOG_WARNING, format, ##__VA_ARGS__)
 #define info(format, ...)  do_log(LOG_INFO,    format, ##__VA_ARGS__)
 #define debug(format, ...) do_log(LOG_DEBUG,   format, ##__VA_ARGS__)
@@ -259,7 +260,13 @@ static int send_packet(struct zixi_stream *stream,
 	
 	// info("zixi_send -> %s [%u / %u]", packet->type == OBS_ENCODER_VIDEO ? "video" : "audio", packet->pts, packet->dts);
 	ret = stream->feeder_functions.zixi_send_elementary_frame(stream->zixi_handle, packet->data, packet->size, packet->type == OBS_ENCODER_VIDEO, packet->pts, packet->dts);
-	
+
+	if (ret != ZIXI_ERROR_OK && ret != ZIXI_ERROR_NOT_READY && ret != ZIXI_WARNING_OVER_LIMIT) {
+		err("zixi_send -> %d", ret); 
+	} else {
+		ret = ZIXI_ERROR_OK;
+	}
+
 	if ((os_gettime_ns() - stream->last_statistics_query_ts) > STATS_QUERY_INTERVAL_NS) {
 		ZIXI_ERROR_CORRECTION_STATS stats = { 0 };
 		if (stream->feeder_functions.zixi_get_stats(stream->zixi_handle, NULL, NULL, &stats) == ZIXI_ERROR_OK){
