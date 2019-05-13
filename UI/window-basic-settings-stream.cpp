@@ -76,8 +76,9 @@ void OBSBasicSettings::InitStreamPage()
 void OBSBasicSettings::populateZixiCombos()
 {
 	obs_properties_t * zixi_props = obs_get_output_properties("zixi_output");
-	obs_property_t* latencies = obs_properties_get(zixi_props, "latencies");
-	obs_property_t* encryptions = obs_properties_get(zixi_props, "encryptions");
+	obs_property_t* latencies = obs_properties_get(zixi_props, "zixi_latencies");
+	obs_property_t* encryptions = obs_properties_get(zixi_props, "zixi_encryptions");
+	obs_data_t * zixi_defaults = obs_output_defaults("zixi_output");
 
 	int	latencies_count = obs_property_list_item_count(latencies);
 	for (int iter = 0; iter < latencies_count; ++iter) {
@@ -90,6 +91,9 @@ void OBSBasicSettings::populateZixiCombos()
 		const char * name = obs_property_list_item_name(encryptions, iter);
 		ui->zixiFwdEncryptionType->addItem(name, iter);
 	}
+
+	ui->zixiFwdVersion->setText(QT_UTF8(obs_data_get_string(zixi_defaults, "zixi_version")));
+	obs_data_release(zixi_defaults);
 }
 
 bool OBSBasicSettings::IsZixiPluginLoaded()
@@ -115,11 +119,12 @@ void OBSBasicSettings::on_zixiFwd_toggled()
 	
 	ui->zixiFwdEnableBonding->setVisible(fwd);
 	ui->zixiFwdEncoderFeedback->setVisible(fwd);
+	on_zixiFwdEncryptionType_currentIndexChanged(ui->zixiFwdEncryptionType->currentIndex());
 }
 
 void OBSBasicSettings::on_zixiFwdEncryptionType_currentIndexChanged(int idx)
 {
-	bool show_key = idx != 3 && ui->zixiFwd->isVisible();
+	bool show_key = idx != 3 && ui->zixiFwd->isChecked();
 	ui->zixiFwdEncryptionKey->setVisible(show_key);
 	ui->zixiFwdEncryptionKeyShow->setVisible(show_key);
 	ui->zixiFwdEncryptionKeyLabel->setVisible(show_key);
@@ -209,9 +214,10 @@ void OBSBasicSettings::LoadStream1Settings()
 			const char * zixi_url = obs_data_get_string(settings, "zixi_url");
 			const char * zixi_password = obs_data_get_string(settings, "zixi_password");
 			int	zixi_latency_id = obs_data_get_int(settings, "zixi_latency_id");
-			int	zixi_encryption_id = obs_data_get_int(settings, "zixi_encryption_id");
+			int	zixi_encryption_id = obs_data_get_int(settings, "zixi_encryption_type");
+			bool	show_encryption_key = obs_data_get_bool(settings, "zixi_show_encryption_key");
 			const char * zixi_encryption_key = nullptr;
-			if (ui->zixiFwdEncryptionType->currentIndex() != 3)
+			if (zixi_encryption_id != 3)
 			{
 				zixi_encryption_key = obs_data_get_string(settings, "zixi_encryption_key");
 			}
@@ -222,11 +228,14 @@ void OBSBasicSettings::LoadStream1Settings()
 			ui->zixiFwdPassword->setText(QT_UTF8(zixi_password));
 			ui->zixiFwdLatency->setCurrentIndex(zixi_latency_id);
 			ui->zixiFwdEncryptionType->setCurrentIndex(zixi_encryption_id);
+			
 			if (zixi_encryption_key != nullptr) {
 				ui->zixiFwdEncryptionKey->setText(QT_UTF8(zixi_encryption_key));
 			}
 			ui->zixiFwdEnableBonding->setChecked(zixi_bonding);
 			ui->zixiFwdEncoderFeedback->setChecked(encoder_feedback);
+			on_zixiFwd_toggled();
+			on_zixiFwdEncryptionType_currentIndexChanged(zixi_encryption_id);
 		}
 	}
 #endif
