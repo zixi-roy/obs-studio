@@ -719,7 +719,7 @@ static bool obs_x264_encode(void *data, struct encoder_frame *frame,
 	
 	if (obsx264->encoder_feedback_info.target_bitrate != obsx264->encoder_feedback_info.current_bitrate) {
 		uint64_t now_time = os_gettime_ns();
-		if ((now_time - obsx264->encoder_feedback_info.last_update_ns) > 1000000) {
+		if (now_time > ( obsx264->encoder_feedback_info.last_update_ns + 1000000)) {
 
 			obsx264->params.rc.i_bitrate = obsx264->encoder_feedback_info.target_bitrate;
 			obsx264->params.rc.i_vbv_max_bitrate = obsx264->encoder_feedback_info.target_bitrate;

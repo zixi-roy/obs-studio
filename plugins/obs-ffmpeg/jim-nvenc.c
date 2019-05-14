@@ -2,6 +2,7 @@
 #include <util/circlebuf.h>
 #include <util/darray.h>
 #include <util/dstr.h>
+#include <util/platform.h> // os_gettime_ns
 #include <obs-avc.h>
 #define INITGUID
 #include <dxgi.h>
@@ -72,6 +73,8 @@ struct nvenc_data {
 
 	uint8_t *sei;
 	size_t  sei_size;
+
+	struct encoder_feedback_info encoder_feedback_info;
 };
 
 /* ------------------------------------------------------------------------- */
@@ -231,12 +234,14 @@ static bool nvenc_update(void *data, obs_data_t *settings)
 	struct nvenc_data *enc = data;
 
 	/* Only support reconfiguration of CBR bitrate */
-	if (enc->can_change_bitrate) {
+	if (enc->can_change_bitrate ) {
 		int bitrate = (int)obs_data_get_int(settings, "bitrate");
 
 		enc->config.rcParams.averageBitRate = bitrate * 1000;
 		enc->config.rcParams.maxBitRate     = bitrate * 1000;
-
+		enc->encoder_feedback_info.current_bitrate = bitrate;
+		enc->encoder_feedback_info.last_update_ns = os_gettime_ns();
+		enc->encoder_feedback_info.target_bitrate = bitrate;
 		NV_ENC_RECONFIGURE_PARAMS params = {0};
 		params.version                   = NV_ENC_RECONFIGURE_PARAMS_VER;
 		params.reInitEncodeParams        = enc->params;
@@ -489,6 +494,10 @@ static bool init_encoder(struct nvenc_data *enc, obs_data_t *settings)
 	h264_config->outputPictureTimingSEI = 1;
 	config->rcParams.averageBitRate = bitrate * 1000;
 	config->rcParams.maxBitRate = vbr ? max_bitrate * 1000 : bitrate * 1000;
+
+	enc->encoder_feedback_info.current_bitrate = bitrate;
+	enc->encoder_feedback_info.target_bitrate = bitrate;
+	enc->encoder_feedback_info.last_update_ns = os_gettime_ns();
 
 	/* -------------------------- */
 	/* profile                    */
@@ -806,6 +815,33 @@ static bool nvenc_encode_tex(void *data, uint32_t handle, int64_t pts,
 		return false;
 	}
 
+	if (enc->encoder_feedback_info.current_bitrate != enc->encoder_feedback_info.target_bitrate) {
+		uint64_t now_time = os_gettime_ns();
+		if (now_time > (enc->encoder_feedback_info.last_update_ns + 1000000)) {
+			// save old value
+			uint32_t old_bitrate_val = enc->config.rcParams.averageBitRate;
+			enc->config.rcParams.averageBitRate = enc->encoder_feedback_info.target_bitrate * 1000;
+			enc->config.rcParams.maxBitRate = enc->encoder_feedback_info.target_bitrate * 1000;
+
+			// reconfigure
+			NV_ENC_RECONFIGURE_PARAMS params = { 0 };
+			params.version = NV_ENC_RECONFIGURE_PARAMS_VER;
+			params.reInitEncodeParams = enc->params;
+
+			// Do not try till next next timeout
+			enc->encoder_feedback_info.last_update_ns = os_gettime_ns();
+
+			// Try and reconfigure
+			if (FAILED(nv.nvEncReconfigureEncoder(enc->session, &params))) {
+				// restore old values
+				enc->config.rcParams.averageBitRate = old_bitrate_val;
+				enc->config.rcParams.maxBitRate = old_bitrate_val;
+			} else {
+				enc->encoder_feedback_info.current_bitrate = enc->encoder_feedback_info.target_bitrate;
+			}
+		}
+	}
+
 	bs    = &enc->bitstreams.array[enc->next_bitstream];
 	nvtex = &enc->textures.array[enc->next_bitstream];
 
@@ -934,11 +970,17 @@ static bool nvenc_sei_data(void *data, uint8_t **sei, size_t *size)
 	return true;
 }
 
+void nvenc_encoder_feedback(void * data, unsigned int bitrate) {
+	struct nvenc_data *enc = (struct obs_x264 *)data;
+	enc->encoder_feedback_info.target_bitrate = bitrate;
+}
+
 struct obs_encoder_info nvenc_info = {
 	.id                      = "jim_nvenc",
 	.codec                   = "h264",
 	.type                    = OBS_ENCODER_VIDEO,
-	.caps                    = OBS_ENCODER_CAP_PASS_TEXTURE,
+	.caps                    = OBS_ENCODER_CAP_PASS_TEXTURE
+				   |OBS_ENCODER_SUPPORTS_DYNAMIC_BITRATE,
 	.get_name                = nvenc_get_name,
 	.create                  = nvenc_create,
 	.destroy                 = nvenc_destroy,
@@ -948,4 +990,5 @@ struct obs_encoder_info nvenc_info = {
 	.get_properties          = nvenc_properties,
 	.get_extra_data          = nvenc_extra_data,
 	.get_sei_data            = nvenc_sei_data,
+	.encoder_feedback	 = nvenc_encoder_feedback
 };
