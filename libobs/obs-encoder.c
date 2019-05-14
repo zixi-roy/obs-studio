@@ -1275,3 +1275,9 @@ uint32_t obs_encoder_get_caps(const obs_encoder_t *encoder)
 	return obs_encoder_valid(encoder, "obs_encoder_get_caps")
 		? encoder->orig_info.caps : 0;
 }
+
+void obs_encoder_feedback(obs_encoder_t * encoder, unsigned int bitrate) {
+	if (obs_encoder_valid(encoder, "obs_encoder_feedback") && encoder->orig_info.encoder_feedback)
+		encoder->orig_info.encoder_feedback(encoder->context.data,bitrate);
+
+}

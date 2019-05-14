@@ -69,6 +69,17 @@ int create_zixi_feeder_functions(struct ZixiFeederFunctions * functions, void * 
 	return 0;
 }
 
+struct zixi_stream_source_control {
+	bool			encoder_feedback;
+	unsigned int	last_sent_encoder_feedback;
+	volatile bool	safe_to_event;
+	volatile bool   can_send_encoder_feedback;
+	unsigned int	minimal_bitrate;
+	float			decimation_factor;
+	uint64_t		total_raw_frames;
+	uint64_t		sent_to_encoder_frames;
+};
+
 struct zixi_stream {
 	obs_output_t		*output;
 
@@ -106,6 +117,8 @@ struct zixi_stream {
 	
 	/* encoder feedback */
 	bool		encoder_feedback_enabled;
+	struct zixi_stream_source_control	encoder_control;
+	pthread_mutex_t				encoder_control_mutex;
 	
 	/* frame drop variables */
 	int64_t          drop_threshold_usec;
@@ -191,6 +204,45 @@ static int zixi_auto_bonding_scan(struct zixi_stream* stream){
 	}
 	return ret;
 }
+static void zixi_encoder_feedback(int total_bps, bool force_iframe, void* param){
+	struct zixi_stream* stream = (struct zixi_stream*)param;
+	unsigned int to_encoder = total_bps;
+
+	if (stream->encoder_control.last_sent_encoder_feedback != total_bps &&
+		!disconnected(stream) &&
+		!connecting(stream) &&
+		active(stream) &&
+		stream->encoder_control.can_send_encoder_feedback &&
+		os_atomic_load_bool(&stream->encoder_control.safe_to_event)) {
+
+		if (to_encoder <= (stream->video_bitrate / 2)) {
+			to_encoder = stream->video_bitrate / 2;
+			debug("zixi_encoder_feedback -> requested %d , setting to %d bps", total_bps, to_encoder);
+		} else {
+			debug("zixi_encoder_feedback -> %d bps", total_bps);
+		}
+
+		if (stream->encoder_control.last_sent_encoder_feedback != to_encoder) {
+			stream->encoder_control.last_sent_encoder_feedback = to_encoder;
+			obs_encoder_t* encoder = obs_output_get_video_encoder(stream->output);
+			// convert to KBPS
+			obs_encoder_feedback(encoder, to_encoder / 1000);
+		}
+
+		pthread_mutex_lock(&stream->encoder_control_mutex);
+		float factor = 1.0f;
+		if ((float)total_bps <= ((float)stream->video_bitrate / 2)) {
+			factor = (float)total_bps / (stream->video_bitrate / 2); // 1 if total_bps = "vid bitrate"/2, 0.5 if total_bps = "vid bitrate"/4
+		}
+		if (factor != stream->encoder_control.decimation_factor) {
+			debug("zixi_encoder_feedback -> %.02f factor", factor);
+			stream->encoder_control.decimation_factor = factor;
+			stream->encoder_control.total_raw_frames = 0;
+			stream->encoder_control.sent_to_encoder_frames = 0;
+		}
+		pthread_mutex_unlock(&stream->encoder_control_mutex);
+	}
+}
 
 static inline bool get_next_packet(
 	struct zixi_stream *stream,
@@ -263,6 +315,7 @@ static int send_packet(struct zixi_stream *stream,
 
 	if (ret != ZIXI_ERROR_OK && ret != ZIXI_ERROR_NOT_READY && ret != ZIXI_WARNING_OVER_LIMIT) {
 		err("zixi_send -> %d", ret); 
+		os_atomic_set_bool(&stream->encoder_control.safe_to_event, false);
 	} else {
 		ret = ZIXI_ERROR_OK;
 	}
@@ -276,13 +329,6 @@ static int send_packet(struct zixi_stream *stream,
 			//info("get statistics %d -> %d", stream->last_dropped_packets, stream->now_dropped_packets);
 		}
 	}
-
-	/*if (ret != ZIXI_ERROR_OK && ret != ZIXI_WARNING_OVER_LIMIT && ret != ZIXI_ERROR_NOT_READY) {
-		warn("zixi_send_elementary_frame %d", ret);
-		os_atomic_set_bool(&stream->encoder_control.safe_to_event, false);
-	} else {
-		ret = ZIXI_ERROR_OK;
-	}*/
 
 	stream->packet_free++;
 	obs_encoder_packet_release(packet);
@@ -404,6 +450,9 @@ static bool init_connect(struct zixi_stream* stream) {
 	stream->dropped_frames = 0;
 	stream->min_drop_dts_usec = 0;
 	stream->min_priority = 0;
+	stream->encoder_control.total_raw_frames = 0;
+	stream->encoder_control.sent_to_encoder_frames = 0;
+	stream->encoder_control.decimation_factor = 1.0f;
 
 	info("zixi_init_connect done");
 	return true;
@@ -414,7 +463,7 @@ static void * send_thread(void * data) {
 
 	os_set_thread_name("zixi-stream: send_thread");
 	info("zixi send thread started");
-
+	stream->encoder_control.can_send_encoder_feedback = true;
 	while (os_sem_wait(stream->send_sem) == 0) {
 		struct encoder_packet packet;
 
@@ -568,7 +617,6 @@ static int try_connect(struct zixi_stream* stream) {
 	memcpy(cfg.sz_hosts[0], stream->host.array ,stream->host.len + 1);
 	cfg.hosts_len[0] = stream->host.len;
 
-
 	cfg.max_delay_packets = ((stream->video_bitrate + stream->audio_bitrate)) / (5* 8 * 188 * 7);
 	cfg.max_bitrate = (int)((stream->max_video_bitrate + stream->audio_bitrate) * 1.15) + 256000;
 
@@ -592,12 +640,29 @@ static int try_connect(struct zixi_stream* stream) {
 	cfg.local_nics = NULL;
 	cfg.num_local_nics = 0;
 	cfg.force_padding = false;
-	stream->encoder_feedback_enabled = false;
 	
-	cfg.fec_overhead = 30;
-	cfg.content_aware_fec = 0;
-	cfg.fec_block_ms = 100;
-	cfg.limited = ZIXI_ADAPTIVE_FEC;
+	if (stream->encoder_feedback_enabled) {
+		info("%s", "encoder_feedback");
+		stream->encoder_control.encoder_feedback = true;
+		os_atomic_set_bool(&stream->encoder_control.safe_to_event, true);
+		stream->encoder_control.last_sent_encoder_feedback = 0;
+		cfg.limited = ZIXI_ADAPTIVE_ENCODER;
+		encoder_info = bzalloc(sizeof(encoder_control_info));
+		encoder_info->aggressiveness = 20;
+		encoder_info->max_bitrate = (stream->video_bitrate + stream->audio_bitrate) * 105 / 100;
+		encoder_info->min_bitrate = encoder_info->max_bitrate / 4;
+		encoder_info->param = stream;
+		encoder_info->update_interval = 2000;
+		encoder_info->setter = zixi_encoder_feedback;
+		cfg.fec_block_ms = 100;
+		cfg.fec_overhead = 5;
+		cfg.force_padding = true;
+	} else {
+		cfg.fec_overhead = 30;
+		cfg.content_aware_fec = 0;
+		cfg.fec_block_ms = 100;
+		cfg.limited = ZIXI_ADAPTIVE_FEC;
+	} 
 	
 	cfg.enforce_bitrate = false;
 	info("Bitrate is set @%u\n", cfg.max_bitrate);
@@ -743,6 +808,7 @@ static void zixi_stream_destroy(void * data) {
 		os_sem_destroy(stream->send_sem);
 		pthread_mutex_destroy(&stream->packets_mutex);
 		circlebuf_free(&stream->packets);
+		pthread_mutex_destroy(&stream->encoder_control_mutex);
 #ifdef H264_DUMP
 		fclose(stream->file);
 #endif
@@ -757,15 +823,16 @@ static void *zixi_stream_create(obs_data_t* settings, obs_output_t* output) {
 	stream->packet_free = 0;
 	stream->drop_threshold_usec = 1000000000;
 	pthread_mutex_init_value(&stream->packets_mutex);
-	
+	pthread_mutex_init_value(&stream->encoder_control_mutex);
 	if (create_zixi_feeder_functions(&stream->feeder_functions, dll) != 0) {
 		goto fail;
 	}
 
-	stream->feeder_functions.zixi_configure_logging(ZIXI_LOG_ALL, zixi_log_callback, NULL);
+	stream->feeder_functions.zixi_configure_logging(ZIXI_LOG_INFO, zixi_log_callback, NULL);
 	if (pthread_mutex_init(&stream->packets_mutex, NULL) != 0)
 		goto fail;
-	
+	if (pthread_mutex_init(&stream->encoder_control_mutex, NULL) != 0)
+		goto fail;
 	if (os_event_init(&stream->stop_event, OS_EVENT_TYPE_MANUAL) != 0) {
 		pthread_mutex_destroy(&stream->packets_mutex);
 		goto fail;
@@ -800,6 +867,7 @@ static void zixi_stream_stop(void * data, uint64_t what) {
 	os_event_signal(stream->stop_event);
 
 	if (active(stream)) {
+		stream->encoder_control.can_send_encoder_feedback = false;
 		obs_output_end_data_capture(stream->output);
 		os_sem_post(stream->send_sem);
 		debug("zixi_stream_stop connecting -> notify end of capture");
@@ -835,11 +903,12 @@ static bool is_lib_h264(obs_output_t* output) {
 	return strcmp(encoder_name, "obs_x264") == 0;
 }
 
-static bool zixi_set_encoder_params(obs_output_t* output, unsigned int * vbitrate, unsigned int * max_vbitrate) {
+static bool zixi_set_encoder_params(obs_output_t* output, unsigned int * vbitrate, unsigned int * max_vbitrate, bool * supports_encoder_feedback) {
 	obs_encoder_t* encoder = obs_output_get_video_encoder(output);
 	obs_data_t* settings = obs_encoder_get_settings(encoder);
 	unsigned int local_vbitrate = 0;
 	unsigned int local_max_vbitrate = 0;
+	*supports_encoder_feedback = obs_encoder_get_caps(encoder) & OBS_ENCODER_SUPPORTS_DYNAMIC_BITRATE;
 
 	if (is_lib_h264(output)) {
 		obs_data_t* settings = obs_encoder_get_settings(encoder);
@@ -878,10 +947,11 @@ static bool zixi_stream_start(void * data) {
 
 	if (!obs_output_can_begin_data_capture(stream->output, 0))
 		return false;
-
-	zixi_set_encoder_params(stream->output, &vbitrate, &max_vbitrate);
+	bool encoder_supports_encoder_feedback = false;
+	zixi_set_encoder_params(stream->output, &vbitrate, &max_vbitrate, & encoder_supports_encoder_feedback);
 	stream->max_video_bitrate = max_vbitrate;
-		
+	stream->encoder_feedback_enabled &= encoder_supports_encoder_feedback;
+
 	audio_t* audio = obs_get_audio();
 	uint32_t channels = audio_output_get_channels(audio);
 	uint32_t sample_rate = audio_output_get_sample_rate(audio);
@@ -1134,9 +1204,9 @@ static float zixi_get_congestion(void *data){
 		r = 1.0f;
 	}
 	if (stream->encoder_feedback_enabled && r != 1.0f) {
-		/*float ratio = (float)stream->encoder_control.last_sent_encoder_feedback /
+		float ratio = (float)stream->encoder_control.last_sent_encoder_feedback /
 			stream->video_bitrate;
-		r = 1.0f - ratio;*/
+		r = 1.0f - ratio;
 	}
 	
 	return r;
@@ -1157,7 +1227,8 @@ void zixi_output_update(void *data, obs_data_t *settings) {
 	if (stream->encryption_type != ZIXI_NO_ENCRYPTION)
 		dstr_copy(&stream->key, obs_data_get_string(settings, ZIXI_SERVICE_PROP_ENCRYPTION_KEY));
 
-
+	stream->encoder_feedback_enabled = obs_data_get_bool(settings, "zixi_encoder_feedback");
+	stream->bonding = obs_data_get_bool(settings, "zixi_bonding");
 	stream->use_auto_rtmp = obs_data_get_bool(settings, "zixi_fwd");
 	if (stream->use_auto_rtmp) {
 		dstr_copy(&stream->auto_rtmp_url, obs_data_get_string(settings, "server"));

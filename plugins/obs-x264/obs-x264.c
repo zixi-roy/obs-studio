@@ -54,6 +54,8 @@ struct obs_x264 {
 	size_t                 sei_size;
 
 	os_performance_token_t *performance_token;
+
+	struct encoder_feedback_info encoder_feedback_info;
 };
 
 /* ------------------------------------------------------------------------- */
@@ -475,6 +477,10 @@ static void update_params(struct obs_x264 *obsx264, obs_data_t *settings,
 	obsx264->params.p_log_private        = obsx264;
 	obsx264->params.i_log_level          = X264_LOG_WARNING;
 
+	obsx264->encoder_feedback_info.current_bitrate = bitrate;
+	obsx264->encoder_feedback_info.target_bitrate = bitrate;
+	obsx264->encoder_feedback_info.last_update_ns = os_gettime_ns();
+
 	if (obs_data_has_user_value(settings, "bf"))
 		obsx264->params.i_bframe = bf;
 
@@ -710,6 +716,22 @@ static bool obs_x264_encode(void *data, struct encoder_frame *frame,
 	if (!frame || !packet || !received_packet)
 		return false;
 
+	
+	if (obsx264->encoder_feedback_info.target_bitrate != obsx264->encoder_feedback_info.current_bitrate) {
+		uint64_t now_time = os_gettime_ns();
+		if ((now_time - obsx264->encoder_feedback_info.last_update_ns) > 1000000) {
+
+			obsx264->params.rc.i_bitrate = obsx264->encoder_feedback_info.target_bitrate;
+			obsx264->params.rc.i_vbv_max_bitrate = obsx264->encoder_feedback_info.target_bitrate;
+			if (x264_encoder_reconfig(obsx264->context, &obsx264->params) == 0) {
+				warn("obs_x264_encode::Setting bitrate to %u OK", obsx264->params.rc.i_bitrate);
+			} else {
+				warn("obs_x264_encode::Setting bitrate to %u FAILED", obsx264->params.rc.i_bitrate);
+			}
+			obsx264->encoder_feedback_info.current_bitrate = obsx264->encoder_feedback_info.target_bitrate;
+			obsx264->encoder_feedback_info.last_update_ns = now_time;
+		}
+	}
 	if (frame)
 		init_pic_data(obsx264, &pic, frame);
 
@@ -772,6 +794,11 @@ static void obs_x264_video_info(void *data, struct video_scale_info *info)
 	info->format = pref_format;
 }
 
+void obs_x264_encoder_feedback(void * data, unsigned int bitrate) {
+	struct obs_x264 *obsx264 = (struct obs_x264 *)data;
+	obsx264->encoder_feedback_info.target_bitrate = bitrate;
+}
+
 struct obs_encoder_info obs_x264_encoder = {
 	.id             = "obs_x264",
 	.type           = OBS_ENCODER_VIDEO,
@@ -785,5 +812,7 @@ struct obs_encoder_info obs_x264_encoder = {
 	.get_defaults   = obs_x264_defaults,
 	.get_extra_data = obs_x264_extra_data,
 	.get_sei_data   = obs_x264_sei,
-	.get_video_info = obs_x264_video_info
+	.get_video_info = obs_x264_video_info,
+	.encoder_feedback = obs_x264_encoder_feedback,
+	.caps		= OBS_ENCODER_SUPPORTS_DYNAMIC_BITRATE
 };
