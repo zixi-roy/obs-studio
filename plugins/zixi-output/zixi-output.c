@@ -547,6 +547,27 @@ static inline int zixi_latency_from_id(unsigned int id) {
 	return r;
 }
 
+static bool zixi_input_control(void * p) {
+	struct zixi_stream * stream = (struct zixi_stream*)p;
+	bool ret = false;
+	pthread_mutex_lock(&stream->encoder_control_mutex);
+	float new_factor = ((float)(stream->encoder_control.sent_to_encoder_frames + 1)) / (stream->encoder_control.total_raw_frames + 1);
+	if (new_factor <= stream->encoder_control.decimation_factor) {
+		stream->encoder_control.sent_to_encoder_frames++;
+		ret = true;
+	} else {
+		stream->dropped_frames++;
+	}
+
+	stream->encoder_control.total_raw_frames++;
+	if (!ret) {
+		debug("zixi_input_control - dropping source frame %u/%u", stream->encoder_control.sent_to_encoder_frames, stream->encoder_control.total_raw_frames);
+	}
+	pthread_mutex_unlock(&stream->encoder_control_mutex);
+	
+	return ret;	
+}
+
 static int try_connect(struct zixi_stream* stream) {
 	char * url_host = NULL;
 	char * url_channel_name = NULL;
@@ -640,10 +661,9 @@ static int try_connect(struct zixi_stream* stream) {
 	cfg.local_nics = NULL;
 	cfg.num_local_nics = 0;
 	cfg.force_padding = false;
-	
+	stream->encoder_control.encoder_feedback = stream->encoder_feedback_enabled;
 	if (stream->encoder_feedback_enabled) {
 		info("%s", "encoder_feedback");
-		stream->encoder_control.encoder_feedback = true;
 		os_atomic_set_bool(&stream->encoder_control.safe_to_event, true);
 		stream->encoder_control.last_sent_encoder_feedback = 0;
 		cfg.limited = ZIXI_ADAPTIVE_ENCODER;
@@ -673,11 +693,12 @@ static int try_connect(struct zixi_stream* stream) {
 	cfg.elementary_streams_config.audio_codec = ZIXI_AUDIO_CODEC_AAC;
 	cfg.elementary_streams_config.audio_channels = 2;
 	cfg.elementary_streams_config.scte_enabled = false;
+	cfg.elementary_streams_max_va_diff_ms = 1000;
 
-	stream->feeder_functions.zixi_configure_logging(ZIXI_LOG_ERRORS, zixi_log_callback, NULL);
+	stream->feeder_functions.zixi_configure_logging(ZIXI_LOG_WARNINGS, zixi_log_callback, NULL);
 
-	stream->feeder_functions.zixi_configure_logging(0, zixi_log_callback, NULL);
 	int zixi_ret = -1;
+	stream->encoder_control.decimation_factor = 1.0f;
 
 	if (stream->use_auto_rtmp) {
 		zixi_rtmp_out_config rtmp_cfg = { 0 };
@@ -1255,7 +1276,7 @@ struct obs_output_info zixi_output = {
 	.start = zixi_stream_start,
 	.stop = zixi_stream_stop,
 	.get_congestion = zixi_get_congestion,
-	// .drop_source_frame = zixi_input_control,
+	.source_input_control = zixi_input_control,
 	.update = zixi_output_update,
 	.encoded_packet = zixi_stream_data,
 	.get_defaults = zixi_stream_defaults,
