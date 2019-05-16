@@ -20,12 +20,18 @@ extern QCefCookieManager *panel_cookies;
 enum class ListOpt : int {
 	ShowAll = 1,
 	Custom,
+	Zixi
 };
 
 enum class Section : int {
 	Connect,
 	StreamKey,
 };
+
+inline bool OBSBasicSettings::IsZixiService() const {
+	return ui->service->currentData().toInt() == (int)ListOpt::Zixi;
+}
+
 
 inline bool OBSBasicSettings::IsCustomService() const
 {
@@ -214,8 +220,7 @@ void OBSBasicSettings::LoadStream1Settings()
 			const char * zixi_url = obs_data_get_string(settings, "zixi_url");
 			const char * zixi_password = obs_data_get_string(settings, "zixi_password");
 			int	zixi_latency_id = obs_data_get_int(settings, "zixi_latency_id");
-			int	zixi_encryption_id = obs_data_get_int(settings, "zixi_encryption_type");
-			bool	show_encryption_key = obs_data_get_bool(settings, "zixi_show_encryption_key");
+			int	zixi_encryption_id = obs_data_get_int(settings, "zixi_encryption_id");
 			const char * zixi_encryption_key = nullptr;
 			if (zixi_encryption_id != 3)
 			{
@@ -253,6 +258,7 @@ void OBSBasicSettings::LoadStream1Settings()
 void OBSBasicSettings::SaveStream1Settings()
 {
 	bool customServer = IsCustomService();
+	
 	const char *service_id = customServer
 		? "rtmp_custom"
 		: "rtmp_common";
@@ -383,6 +389,12 @@ void OBSBasicSettings::LoadServices(bool showAll)
 			QTStr("Basic.AutoConfig.StreamPage.Service.Custom"),
 			QVariant((int)ListOpt::Custom));
 
+#ifdef ENABLE_ZIXI_SUPPORT
+	ui->service->insertItem(1,
+		QTStr("Basic.AutoConfig.StreamPage.Service.Zixi"),
+		QVariant((int)ListOpt::Zixi));
+#endif
+
 	if (!lastService.isEmpty()) {
 		int idx = ui->service->findText(lastService);
 		if (idx != -1)
@@ -405,6 +417,27 @@ void OBSBasicSettings::on_service_currentIndexChanged(int)
 		ui->service->currentData().toInt() == (int)ListOpt::ShowAll;
 	if (showMore)
 		return;
+
+	bool zixiService = IsZixiService();
+	
+	ui->server->setVisible(!zixiService);
+	ui->serverLabel->setVisible(!zixiService);
+	ui->customServer->setVisible(!zixiService);
+	ui->key->setVisible(!zixiService);
+	ui->streamKeyLabel->setVisible(!zixiService);
+	ui->show->setVisible(!zixiService);
+	ui->connectAccount2->setVisible(!zixiService);
+	ui->authUsernameLabel->setVisible(!zixiService);
+	ui->authUsername->setVisible(!zixiService);
+	ui->authPwLabel->setVisible(!zixiService);
+	ui->authPw->setVisible(!zixiService);
+	ui->useAuth->setVisible(!zixiService);
+	ui->zixiFwd->setVisible(!zixiService);
+	if (zixiService) {
+		ui->zixiFwd->setChecked(true);
+		on_zixiFwd_toggled();
+		return;
+	}
 
 	std::string service = QT_TO_UTF8(ui->service->currentText());
 	bool custom = IsCustomService();
