@@ -12,6 +12,17 @@ struct rtmp_common {
 	char *key;
 
 	char *output;
+
+#ifdef ENABLE_ZIXI_SUPPORT
+	bool zixi_fwd;
+	char * zixi_url;
+	char * zixi_password;
+	int	zixi_latency_id;
+	int	zixi_encryption_type;
+	char * zixi_encryption_key;
+	bool	zixi_encoder_feedback;
+	bool    zixi_bonding;
+#endif
 };
 
 static const char *rtmp_common_getname(void *unused)
@@ -69,6 +80,21 @@ static void rtmp_common_update(void *data, obs_data_t *settings)
 	bfree(service->output);
 	bfree(service->key);
 
+#ifdef ENABLE_ZIXI_SUPPORT
+	bfree(service->zixi_url);
+	bfree(service->zixi_password);
+	bfree(service->zixi_encryption_key);
+
+	service->zixi_fwd = obs_data_get_bool(settings, "zixi_fwd");
+	service->zixi_url = bstrdup(obs_data_get_string(settings, "zixi_url"));
+	service->zixi_password = bstrdup(obs_data_get_string(settings, "zixi_password"));
+	service->zixi_latency_id = obs_data_get_int(settings, "zixi_latency_id");
+	service->zixi_encryption_type = obs_data_get_int(settings, "zixi_encryption_id");
+	service->zixi_encryption_key = bstrdup(obs_data_get_string(settings, "zixi_encryption_key"));
+	service->zixi_encoder_feedback = obs_data_get_bool(settings, "zixi_encoder_feedback");
+	service->zixi_bonding = obs_data_get_bool(settings, "zixi_bonding");
+#endif
+
 	service->service = bstrdup(obs_data_get_string(settings, "service"));
 	service->server  = bstrdup(obs_data_get_string(settings, "server"));
 	service->key     = bstrdup(obs_data_get_string(settings, "key"));
@@ -109,6 +135,11 @@ static void rtmp_common_destroy(void *data)
 	bfree(service->server);
 	bfree(service->output);
 	bfree(service->key);
+#ifdef ENABLE_ZIXI_SUPPORT
+	bfree(service->zixi_url);
+	bfree(service->zixi_password);
+	bfree(service->zixi_encryption_key);
+#endif
 	bfree(service);
 }
 
@@ -463,6 +494,22 @@ static obs_properties_t *rtmp_common_properties(void *unused)
 
 	obs_properties_add_text(ppts, "key", obs_module_text("StreamKey"),
 			OBS_TEXT_PASSWORD);
+
+#ifdef ENABLE_ZIXI_SUPPORT
+	p = obs_properties_add_bool(ppts, "zixi_fwd", obs_module_text("ZixiFwd"));
+	obs_properties_add_text(ppts, "zixi_url", obs_module_text("ZixiUrl"),
+		OBS_TEXT_DEFAULT);
+	obs_properties_add_text(ppts, "zixi_password", obs_module_text("ZixiPassword"),
+		OBS_TEXT_PASSWORD);
+	obs_properties_add_list(ppts, "zixi_latency", obs_module_text("ZixiLatency"), OBS_COMBO_TYPE_LIST,
+		OBS_COMBO_FORMAT_INT);
+	obs_properties_add_list(ppts, "zixi_encryption_type", obs_module_text("ZixiEncryptionType"), OBS_COMBO_TYPE_LIST,
+		OBS_COMBO_FORMAT_STRING);
+	obs_properties_add_text(ppts, "zixi_encryption_key", obs_module_text("ZixiEncryptionKey"),
+		OBS_TEXT_PASSWORD);
+	obs_properties_add_bool(ppts, "zixi_encoder_feedback", obs_module_text("ZixiEncoderFeedback"));
+	obs_properties_add_bool(ppts, "zixi_bonding", obs_module_text("ZixiBonding"));
+#endif 	// ENABLE_ZIXI_SUPPORT
 	return ppts;
 }
 
@@ -564,7 +611,15 @@ static void rtmp_common_apply_settings(void *data,
 static const char *rtmp_common_get_output_type(void *data)
 {
 	struct rtmp_common *service = data;
-	return service->output;
+
+	const char * ret = service->output;
+#ifdef ENABLE_ZIXI_SUPPORT
+	if (service->zixi_fwd) {
+		ret = "zixi_output";
+	}
+#endif
+
+	return ret;
 }
 
 static const char *rtmp_common_url(void *data)
