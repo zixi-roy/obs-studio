@@ -4,6 +4,7 @@ include_directories(${OBS_JANSSON_INCLUDE_DIRS})
 
 set(zixi-output_SOURCES
 	zixi-output.c
+	zixi-service.c
 	zixi-output-main.c)
 
 set(zixi-output_HEADERS

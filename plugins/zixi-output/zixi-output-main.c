@@ -13,6 +13,8 @@ OBS_MODULE_USE_DEFAULT_LOCALE("zixi-output", "en-US")
 
 int zixi_load_dll();
 int zixi_unload_dll();
+
+extern struct obs_service_info zixi_service;
 extern struct obs_output_info zixi_output;
 
 bool obs_module_load(void)
@@ -20,9 +22,10 @@ bool obs_module_load(void)
 	if (zixi_load_dll() == 0)
 	{
 		obs_register_output(&zixi_output);
-		return false;
+		obs_register_service(&zixi_service);
+		return true;
 	}
-	return true;
+	return false;
 }
 
 void obs_module_unload(void)

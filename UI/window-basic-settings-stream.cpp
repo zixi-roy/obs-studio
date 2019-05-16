@@ -170,7 +170,39 @@ void OBSBasicSettings::LoadStream1Settings()
 	const char *service = obs_data_get_string(settings, "service");
 	const char *server = obs_data_get_string(settings, "server");
 	const char *key = obs_data_get_string(settings, "key");
+#ifdef ENABLE_ZIXI_SUPPORT
+	if (strcmp(type, "zixi_service") == 0) {
+		ui->service->setCurrentIndex(1);
+		on_service_currentIndexChanged(1);
+		const char * zixi_url = obs_data_get_string(settings, "zixi_url");
+		const char * zixi_password = obs_data_get_string(settings, "zixi_password");
+		int	zixi_latency_id = obs_data_get_int(settings, "zixi_latency_id");
+		int	zixi_encryption_id = obs_data_get_int(settings, "zixi_encryption_id");
+		const char * zixi_encryption_key = nullptr;
+		if (zixi_encryption_id != 3)
+		{
+			zixi_encryption_key = obs_data_get_string(settings, "zixi_encryption_key");
+		}
+		bool zixi_bonding = obs_data_get_bool(settings, "zixi_bonding");
+		bool encoder_feedback = obs_data_get_bool(settings, "zixi_encoder_feedback");
 
+		ui->zixiFwdUrl->setText(QT_UTF8(zixi_url));
+		ui->zixiFwdPassword->setText(QT_UTF8(zixi_password));
+		ui->zixiFwdLatency->setCurrentIndex(zixi_latency_id);
+		ui->zixiFwdEncryptionType->setCurrentIndex(zixi_encryption_id);
+
+		if (zixi_encryption_key != nullptr) {
+			ui->zixiFwdEncryptionKey->setText(QT_UTF8(zixi_encryption_key));
+		}
+		ui->zixiFwdEnableBonding->setChecked(zixi_bonding);
+		ui->zixiFwdEncoderFeedback->setChecked(encoder_feedback);
+		ui->zixiFwd->setChecked(true);
+		on_zixiFwd_toggled();
+		on_zixiFwdEncryptionType_currentIndexChanged(zixi_encryption_id);
+		return;
+	}
+	else
+#endif
 	if (strcmp(type, "rtmp_custom") == 0) {
 		ui->service->setCurrentIndex(0);
 		ui->customServer->setText(server);
@@ -263,6 +295,11 @@ void OBSBasicSettings::SaveStream1Settings()
 		? "rtmp_custom"
 		: "rtmp_common";
 
+#ifdef ENABLE_ZIXI_SUPPORT
+	if (IsZixiService())
+		service_id = "zixi_service";
+#endif
+
 	obs_service_t *oldService = main->GetService();
 	OBSData hotkeyData = obs_hotkeys_save_service(oldService);
 	obs_data_release(hotkeyData);
@@ -270,45 +307,62 @@ void OBSBasicSettings::SaveStream1Settings()
 	OBSData settings = obs_data_create();
 	obs_data_release(settings);
 
-	if (!customServer) {
-		obs_data_set_string(settings, "service",
+	if (strcmp(service_id, "zixi_service") != 0) {
+		if (!customServer) {
+			obs_data_set_string(settings, "service",
 				QT_TO_UTF8(ui->service->currentText()));
-		obs_data_set_string(settings, "server",
+			obs_data_set_string(settings, "server",
 				QT_TO_UTF8(ui->server->currentData().toString()));
-	} else {
-		obs_data_set_string(settings, "server",
+		} else {
+			obs_data_set_string(settings, "server",
 				QT_TO_UTF8(ui->customServer->text()));
-		obs_data_set_bool(settings, "use_auth",
+			obs_data_set_bool(settings, "use_auth",
 				ui->useAuth->isChecked());
-		if (ui->useAuth->isChecked()) {
-			obs_data_set_string(settings, "username",
+			if (ui->useAuth->isChecked()) {
+				obs_data_set_string(settings, "username",
 					QT_TO_UTF8(ui->authUsername->text()));
-			obs_data_set_string(settings, "password",
+				obs_data_set_string(settings, "password",
 					QT_TO_UTF8(ui->authPw->text()));
+			}
 		}
-	}
 
-	obs_data_set_bool(settings, "bwtest", ui->bandwidthTestEnable->isChecked());
-	obs_data_set_string(settings, "key", QT_TO_UTF8(ui->key->text()));
+		obs_data_set_bool(settings, "bwtest", ui->bandwidthTestEnable->isChecked());
+		obs_data_set_string(settings, "key", QT_TO_UTF8(ui->key->text()));
 
 #ifdef ENABLE_ZIXI_SUPPORT
-	if (IsZixiPluginLoaded()) {
-		obs_data_set_bool(settings, "zixi_fwd", ui->zixiFwd->isChecked());
-		if (ui->zixiFwd->isChecked())
-		{
-			obs_data_set_string(settings, "zixi_url", QT_TO_UTF8(ui->zixiFwdUrl->text()));
-			obs_data_set_string(settings, "zixi_password", QT_TO_UTF8(ui->zixiFwdPassword->text()));
-			obs_data_set_int(settings, "zixi_latency_id", ui->zixiFwdLatency->currentIndex());
-			obs_data_set_int(settings, "zixi_encryption_id", ui->zixiFwdEncryptionType->currentIndex());
-			if (ui->zixiFwdEncryptionType->currentIndex() != 3)
+		if (IsZixiPluginLoaded()) {
+			obs_data_set_bool(settings, "zixi_fwd", ui->zixiFwd->isChecked());
+			if (ui->zixiFwd->isChecked())
 			{
-				obs_data_set_string(settings, "zixi_encryption_key", QT_TO_UTF8(ui->zixiFwdEncryptionKey->text()));
+				obs_data_set_string(settings, "zixi_url", QT_TO_UTF8(ui->zixiFwdUrl->text()));
+				obs_data_set_string(settings, "zixi_password", QT_TO_UTF8(ui->zixiFwdPassword->text()));
+				obs_data_set_int(settings, "zixi_latency_id", ui->zixiFwdLatency->currentIndex());
+				obs_data_set_int(settings, "zixi_encryption_id", ui->zixiFwdEncryptionType->currentIndex());
+				if (ui->zixiFwdEncryptionType->currentIndex() != 3)
+				{
+					obs_data_set_string(settings, "zixi_encryption_key", QT_TO_UTF8(ui->zixiFwdEncryptionKey->text()));
+				}
+				obs_data_set_bool(settings, "zixi_bonding", ui->zixiFwdEnableBonding->isChecked());
+				obs_data_set_bool(settings, "zixi_encoder_feedback", ui->zixiFwdEncoderFeedback->isChecked());
+				obs_data_set_bool(settings, "zixi_rtmp_fwd", true);
 			}
-			obs_data_set_bool(settings, "zixi_bonding", ui->zixiFwdEnableBonding->isChecked());
-			obs_data_set_bool(settings, "zixi_encoder_feedback", ui->zixiFwdEncoderFeedback->isChecked());
 		}
-	}
 #endif 
+	} else {
+		obs_data_set_string(settings, "zixi_url", QT_TO_UTF8(ui->zixiFwdUrl->text()));
+		obs_data_set_string(settings, "zixi_password", QT_TO_UTF8(ui->zixiFwdPassword->text()));
+		obs_data_set_int(settings, "zixi_latency_id", ui->zixiFwdLatency->currentIndex());
+		obs_data_set_int(settings, "zixi_encryption_id", ui->zixiFwdEncryptionType->currentIndex());
+		if (ui->zixiFwdEncryptionType->currentIndex() != 3)
+		{
+			obs_data_set_string(settings, "zixi_encryption_key", QT_TO_UTF8(ui->zixiFwdEncryptionKey->text()));
+		}
+		obs_data_set_bool(settings, "zixi_bonding", ui->zixiFwdEnableBonding->isChecked());
+		obs_data_set_bool(settings, "zixi_encoder_feedback", ui->zixiFwdEncoderFeedback->isChecked());
+		obs_data_set_bool(settings, "zixi_rtmp_fwd", false);
+	}
+
+
 	OBSService newService = obs_service_create(service_id,
 			"default_service", settings, hotkeyData);
 	obs_service_release(newService);
@@ -433,6 +487,7 @@ void OBSBasicSettings::on_service_currentIndexChanged(int)
 	ui->authPw->setVisible(!zixiService);
 	ui->useAuth->setVisible(!zixiService);
 	ui->zixiFwd->setVisible(!zixiService);
+	ui->authPwShow->setVisible(!zixiService);
 	if (zixiService) {
 		ui->zixiFwd->setChecked(true);
 		on_zixiFwd_toggled();
