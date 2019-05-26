@@ -699,7 +699,7 @@ static int try_connect(struct zixi_stream* stream) {
 
 	int zixi_ret = -1;
 	stream->encoder_control.decimation_factor = 1.0f;
-
+	
 	if (stream->use_auto_rtmp) {
 		zixi_rtmp_out_config rtmp_cfg = { 0 };
 		rtmp_cfg.max_va_diff = 10000;
@@ -1227,7 +1227,14 @@ static float zixi_get_congestion(void *data){
 	if (stream->encoder_feedback_enabled && r != 1.0f) {
 		float ratio = (float)stream->encoder_control.last_sent_encoder_feedback /
 			stream->video_bitrate;
-		r = 1.0f - ratio;
+
+		if (stream->encoder_control.last_sent_encoder_feedback != 0) {
+			if (ratio > 1.0f) ratio = 1.0f;
+			r = 1.0f - ratio;
+		} else {
+			r = 0.0f;
+		}
+		info("zixi_get_congesion -> returning %.02f", r);
 	}
 	
 	return r;
