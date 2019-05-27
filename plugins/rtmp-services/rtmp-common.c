@@ -71,8 +71,7 @@ static void ensure_valid_url(struct rtmp_common *service, json_t *json,
 	}
 }
 
-static void rtmp_common_update(void *data, obs_data_t *settings)
-{
+static void rtmp_common_update_ex(void *data, obs_data_t *settings, bool set_defaults) {
 	struct rtmp_common *service = data;
 
 	bfree(service->service);
@@ -88,17 +87,25 @@ static void rtmp_common_update(void *data, obs_data_t *settings)
 	service->zixi_fwd = obs_data_get_bool(settings, "zixi_fwd");
 	service->zixi_url = bstrdup(obs_data_get_string(settings, "zixi_url"));
 	service->zixi_password = bstrdup(obs_data_get_string(settings, "zixi_password"));
-	service->zixi_latency_id = obs_data_get_int(settings, "zixi_latency_id");
-	service->zixi_encryption_type = obs_data_get_int(settings, "zixi_encryption_id");
 	service->zixi_encryption_key = bstrdup(obs_data_get_string(settings, "zixi_encryption_key"));
 	service->zixi_encoder_feedback = obs_data_get_bool(settings, "zixi_encoder_feedback");
 	service->zixi_bonding = obs_data_get_bool(settings, "zixi_bonding");
+
+	if (set_defaults) {
+		service->zixi_encryption_type = 3;
+		obs_data_set_int(settings, "zixi_encryption_id",3);
+		service->zixi_latency_id = 6;
+		obs_data_set_int(settings, "zixi_latency_id",6);
+	} else {
+		service->zixi_encryption_type = obs_data_get_int(settings, "zixi_encryption_id");
+		service->zixi_latency_id = obs_data_get_int(settings, "zixi_latency_id");
+	}
 #endif
 
 	service->service = bstrdup(obs_data_get_string(settings, "service"));
-	service->server  = bstrdup(obs_data_get_string(settings, "server"));
-	service->key     = bstrdup(obs_data_get_string(settings, "key"));
-	service->output  = NULL;
+	service->server = bstrdup(obs_data_get_string(settings, "server"));
+	service->key = bstrdup(obs_data_get_string(settings, "key"));
+	service->output = NULL;
 
 	json_t *root = open_services_file();
 	if (root) {
@@ -127,6 +134,11 @@ static void rtmp_common_update(void *data, obs_data_t *settings)
 		service->output = bstrdup("rtmp_output");
 }
 
+static void rtmp_common_update(void *data, obs_data_t *settings)
+{
+	rtmp_common_update_ex(data,settings,false);
+}
+
 static void rtmp_common_destroy(void *data)
 {
 	struct rtmp_common *service = data;
@@ -146,7 +158,7 @@ static void rtmp_common_destroy(void *data)
 static void *rtmp_common_create(obs_data_t *settings, obs_service_t *service)
 {
 	struct rtmp_common *data = bzalloc(sizeof(struct rtmp_common));
-	rtmp_common_update(data, settings);
+	rtmp_common_update_ex(data, settings,true);
 
 	UNUSED_PARAMETER(service);
 	return data;

@@ -23,8 +23,7 @@ static const char *rtmp_custom_name(void *unused)
 	return obs_module_text("CustomStreamingServer");
 }
 
-static void rtmp_custom_update(void *data, obs_data_t *settings)
-{
+static void rtmp_custom_update_ex(void *data, obs_data_t *settings, bool load_defaults) {
 	struct rtmp_custom *service = data;
 
 	bfree(service->server);
@@ -37,20 +36,31 @@ static void rtmp_custom_update(void *data, obs_data_t *settings)
 	bfree(service->zixi_encryption_key);
 
 	service->zixi_fwd = obs_data_get_bool(settings, "zixi_fwd");
-	service->zixi_url = bstrdup(obs_data_get_string(settings,"zixi_url"));
+	service->zixi_url = bstrdup(obs_data_get_string(settings, "zixi_url"));
 	service->zixi_password = bstrdup(obs_data_get_string(settings, "zixi_password"));
 	service->zixi_latency_id = obs_data_get_int(settings, "zixi_latency_id");
-	service->zixi_encryption_type = obs_data_get_int(settings,"zixi_encryption_id");
+	service->zixi_encryption_type = obs_data_get_int(settings, "zixi_encryption_id");
 	service->zixi_encryption_key = bstrdup(obs_data_get_string(settings, "zixi_encryption_key"));
 	service->zixi_encoder_feedback = obs_data_get_bool(settings, "zixi_encoder_feedback");
-	service->zixi_bonding = obs_data_get_bool(settings,"zixi_bonding");
+	service->zixi_bonding = obs_data_get_bool(settings, "zixi_bonding");
+	if (load_defaults) {
+		obs_data_set_int(settings, "zixi_latency_id",6);
+		service->zixi_latency_id = 6;
+		service->zixi_encryption_type = 3;
+		obs_data_set_int(settings, "zixi_encryption_id",3);
+	}
 #endif
 
 	service->server = bstrdup(obs_data_get_string(settings, "server"));
-	service->key    = bstrdup(obs_data_get_string(settings, "key"));
+	service->key = bstrdup(obs_data_get_string(settings, "key"));
 	service->use_auth = obs_data_get_bool(settings, "use_auth");
 	service->username = bstrdup(obs_data_get_string(settings, "username"));
 	service->password = bstrdup(obs_data_get_string(settings, "password"));
+}
+
+static void rtmp_custom_update(void *data, obs_data_t *settings)
+{
+	rtmp_custom_update_ex(data, settings, false);
 }
 
 static void rtmp_custom_destroy(void *data)
@@ -73,7 +83,7 @@ static void rtmp_custom_destroy(void *data)
 static void *rtmp_custom_create(obs_data_t *settings, obs_service_t *service)
 {
 	struct rtmp_custom *data = bzalloc(sizeof(struct rtmp_custom));
-	rtmp_custom_update(data, settings);
+	rtmp_custom_update_ex(data, settings, true);
 
 	UNUSED_PARAMETER(service);
 	return data;

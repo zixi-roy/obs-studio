@@ -247,33 +247,32 @@ void OBSBasicSettings::LoadStream1Settings()
 	if (IsZixiPluginLoaded()) {
 		bool zixi_fwd = obs_data_get_bool(settings, "zixi_fwd");
 		ui->zixiFwd->setChecked(zixi_fwd);
-		if (zixi_fwd)
+		
+		const char * zixi_url = obs_data_get_string(settings, "zixi_url");
+		const char * zixi_password = obs_data_get_string(settings, "zixi_password");
+		int	zixi_latency_id = obs_data_get_int(settings, "zixi_latency_id");
+		int	zixi_encryption_id = obs_data_get_int(settings, "zixi_encryption_id");
+		const char * zixi_encryption_key = nullptr;
+		if (zixi_encryption_id != 3)
 		{
-			const char * zixi_url = obs_data_get_string(settings, "zixi_url");
-			const char * zixi_password = obs_data_get_string(settings, "zixi_password");
-			int	zixi_latency_id = obs_data_get_int(settings, "zixi_latency_id");
-			int	zixi_encryption_id = obs_data_get_int(settings, "zixi_encryption_id");
-			const char * zixi_encryption_key = nullptr;
-			if (zixi_encryption_id != 3)
-			{
-				zixi_encryption_key = obs_data_get_string(settings, "zixi_encryption_key");
-			}
-			bool zixi_bonding = obs_data_get_bool(settings, "zixi_bonding");
-			bool encoder_feedback = obs_data_get_bool(settings, "zixi_encoder_feedback");
-
-			ui->zixiFwdUrl->setText(QT_UTF8(zixi_url));
-			ui->zixiFwdPassword->setText(QT_UTF8(zixi_password));
-			ui->zixiFwdLatency->setCurrentIndex(zixi_latency_id);
-			ui->zixiFwdEncryptionType->setCurrentIndex(zixi_encryption_id);
-			
-			if (zixi_encryption_key != nullptr) {
-				ui->zixiFwdEncryptionKey->setText(QT_UTF8(zixi_encryption_key));
-			}
-			ui->zixiFwdEnableBonding->setChecked(zixi_bonding);
-			ui->zixiFwdEncoderFeedback->setChecked(encoder_feedback);
-			on_zixiFwd_toggled();
-			on_zixiFwdEncryptionType_currentIndexChanged(zixi_encryption_id);
+			zixi_encryption_key = obs_data_get_string(settings, "zixi_encryption_key");
 		}
+		bool zixi_bonding = obs_data_get_bool(settings, "zixi_bonding");
+		bool encoder_feedback = obs_data_get_bool(settings, "zixi_encoder_feedback");
+
+		ui->zixiFwdUrl->setText(QT_UTF8(zixi_url));
+		ui->zixiFwdPassword->setText(QT_UTF8(zixi_password));
+		ui->zixiFwdLatency->setCurrentIndex(zixi_latency_id);
+		ui->zixiFwdEncryptionType->setCurrentIndex(zixi_encryption_id);
+			
+		if (zixi_encryption_key != nullptr) {
+			ui->zixiFwdEncryptionKey->setText(QT_UTF8(zixi_encryption_key));
+		}
+		ui->zixiFwdEnableBonding->setChecked(zixi_bonding);
+		ui->zixiFwdEncoderFeedback->setChecked(encoder_feedback);
+		on_zixiFwd_toggled();
+		on_zixiFwdEncryptionType_currentIndexChanged(zixi_encryption_id);
+		
 	}
 #endif
 
@@ -465,15 +464,38 @@ static inline bool is_auth_service(const std::string &service)
 	return Auth::AuthType(service) != Auth::Type::None;
 }
 
+void OBSBasicSettings::ReloadService() {
+	obs_service_t *service_obj = main->GetService();
+	OBSData settings = obs_data_create();
+	obs_data_release(settings);
+	const char *service_id = IsCustomService() ? "rtmp_custom" : "rtmp_common";
+	if (IsZixiService()) {
+		service_id = "zixi_service";
+	}
+
+	OBSService newService = obs_service_create(service_id,
+		"temp_service", settings, nullptr);
+	main->SetService(newService);
+	LoadStream1Settings();
+}
+
 void OBSBasicSettings::on_service_currentIndexChanged(int)
 {
+	bool force_load_stream_settings = false;
 	bool showMore =
 		ui->service->currentData().toInt() == (int)ListOpt::ShowAll;
 	if (showMore)
 		return;
 
+#ifdef ENABLE_ZIXI_SUPPORT
 	bool zixiService = IsZixiService();
-	
+	obs_service_t *service_obj = main->GetService();
+	const char *type = obs_service_get_type(service_obj);
+	bool previousWasZixi = strcmp(type, "zixi_service") == 0;
+	if (previousWasZixi != zixiService) {
+		force_load_stream_settings = true;
+	}
+#endif
 	ui->server->setVisible(!zixiService);
 	ui->serverLabel->setVisible(!zixiService);
 	ui->customServer->setVisible(!zixiService);
@@ -491,6 +513,8 @@ void OBSBasicSettings::on_service_currentIndexChanged(int)
 	if (zixiService) {
 		ui->zixiFwd->setChecked(true);
 		on_zixiFwd_toggled();
+		if (force_load_stream_settings)
+			ReloadService();
 		return;
 	}
 
@@ -548,6 +572,12 @@ void OBSBasicSettings::on_service_currentIndexChanged(int)
 		OnAuthConnected();
 	}
 #endif
+
+	if (force_load_stream_settings)
+	{
+		ReloadService();
+		
+	}
 }
 
 void OBSBasicSettings::UpdateServerList()

@@ -170,6 +170,7 @@ private:
 	void SaveEncoder(QComboBox *combo, const char *section,
 			const char *value);
 
+	void ReloadService();
 	inline bool Changed() const
 	{
 		return generalChanged || outputsChanged || stream1Changed ||
