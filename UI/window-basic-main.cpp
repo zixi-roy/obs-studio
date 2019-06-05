@@ -220,6 +220,13 @@ OBSBasic::OBSBasic(QWidget *parent)
 	ui->setupUi(this);
 	ui->previewDisabledLabel->setVisible(false);
 
+#ifndef ENABLE_ZIXI_SUPPORT
+	ui->actionGetZixi->setVisible(false);
+#endif 
+#ifndef WIN32
+	ui->actionGetZixi->setVisible(false);
+#endif
+
 	startingDockLayout = saveState();
 
 	statsDock = new OBSDock();
@@ -7202,6 +7209,23 @@ void OBSBasic::on_actionShowAbout_triggered()
 	about->show();
 
 	about->setAttribute(Qt::WA_DeleteOnClose, true);
+}
+
+void OBSBasic::on_actionGetZixi_triggered()
+{
+#ifdef WIN32
+	QUrl zixi_url("http://downloads.zixi.com/free/feeder_interface/windows/windows_download.html");
+#else
+	QUrl zixi_url("http://www.zixi.com");
+#endif
+	int failed = -1;
+	if (QDesktopServices::openUrl(zixi_url)) {
+		failed = 0;
+	} else {
+		failed = 1;
+	}
+
+	int m = failed;
 }
 
 void OBSBasic::ResizeOutputSizeOfSource()
