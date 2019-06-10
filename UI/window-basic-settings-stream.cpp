@@ -487,8 +487,9 @@ void OBSBasicSettings::on_service_currentIndexChanged(int)
 	if (showMore)
 		return;
 
+	bool zixiService = false;
 #ifdef ENABLE_ZIXI_SUPPORT
-	bool zixiService = IsZixiService();
+	zixiService = IsZixiService();
 	obs_service_t *service_obj = main->GetService();
 	const char *type = obs_service_get_type(service_obj);
 	bool previousWasZixi = strcmp(type, "zixi_service") == 0;
