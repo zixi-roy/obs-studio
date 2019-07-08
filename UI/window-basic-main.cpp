@@ -223,9 +223,6 @@ OBSBasic::OBSBasic(QWidget *parent)
 #ifndef ENABLE_ZIXI_SUPPORT
 	ui->actionGetZixi->setVisible(false);
 #endif 
-#if !defined(WIN32) && !defined(__APPLE__)
-	ui->actionGetZixi->setVisible(false);
-#endif
 
 	startingDockLayout = saveState();
 
@@ -7240,7 +7237,7 @@ void OBSBasic::on_actionGetZixi_triggered()
 #elif __APPLE__
 	QUrl zixi_url("http://downloads.zixi.com/free/feeder_interface/osx/osx_download.html");
 #else
-	QUrl zixi_url("http://www.zixi.com");
+	QUrl zixi_url("http://downloads.zixi.com/free/feeder_interface/linux/linux_download.html");
 #endif
 	int failed = -1;
 	if (QDesktopServices::openUrl(zixi_url)) {
