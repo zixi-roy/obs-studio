@@ -223,7 +223,7 @@ OBSBasic::OBSBasic(QWidget *parent)
 #ifndef ENABLE_ZIXI_SUPPORT
 	ui->actionGetZixi->setVisible(false);
 #endif 
-#ifndef WIN32
+#if !defined(WIN32) || !defined(__APPLE__)
 	ui->actionGetZixi->setVisible(false);
 #endif
 
@@ -7237,6 +7237,8 @@ void OBSBasic::on_actionGetZixi_triggered()
 {
 #ifdef WIN32
 	QUrl zixi_url("http://downloads.zixi.com/free/feeder_interface/windows/windows_download.html");
+#elif __APPLE__
+	QUrl zixi_url("http://downloads.zixi.com/free/feeder_interface/osx/osx_download.html");
 #else
 	QUrl zixi_url("http://www.zixi.com");
 #endif
