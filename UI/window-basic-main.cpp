@@ -223,7 +223,7 @@ OBSBasic::OBSBasic(QWidget *parent)
 #ifndef ENABLE_ZIXI_SUPPORT
 	ui->actionGetZixi->setVisible(false);
 #endif 
-#if !defined(WIN32) || !defined(__APPLE__)
+#if !defined(WIN32) && !defined(__APPLE__)
 	ui->actionGetZixi->setVisible(false);
 #endif
 
