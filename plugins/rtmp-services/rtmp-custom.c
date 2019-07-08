@@ -90,7 +90,7 @@ static void *rtmp_custom_create(obs_data_t *settings, obs_service_t *service)
 }
 
 static bool use_auth_modified(obs_properties_t *ppts, obs_property_t *p,
-	obs_data_t *settings)
+			      obs_data_t *settings)
 {
 	bool use_auth = obs_data_get_bool(settings, "use_auth");
 	p = obs_properties_get(ppts, "username");
@@ -109,13 +109,14 @@ static obs_properties_t *rtmp_custom_properties(void *unused)
 	obs_properties_add_text(ppts, "server", "URL", OBS_TEXT_DEFAULT);
 
 	obs_properties_add_text(ppts, "key", obs_module_text("StreamKey"),
-			OBS_TEXT_PASSWORD);
+				OBS_TEXT_PASSWORD);
 
-	p = obs_properties_add_bool(ppts, "use_auth", obs_module_text("UseAuth"));
+	p = obs_properties_add_bool(ppts, "use_auth",
+				    obs_module_text("UseAuth"));
 	obs_properties_add_text(ppts, "username", obs_module_text("Username"),
-			OBS_TEXT_DEFAULT);
+				OBS_TEXT_DEFAULT);
 	obs_properties_add_text(ppts, "password", obs_module_text("Password"),
-			OBS_TEXT_PASSWORD);
+				OBS_TEXT_PASSWORD);
 	obs_property_set_modified_callback(p, use_auth_modified);
 
 #ifdef ENABLE_ZIXI_SUPPORT
