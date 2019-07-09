@@ -26,6 +26,17 @@ What is OBS Studio?
   It's distributed under the GNU General Public License v2 (or any later
   version) - see the accompanying COPYING file for more details.
 
+Branch - zixi features
+----------------------
+
+ - Adds native Zixi output to OBS for robust low latency streaming
+
+ - Supports streaming to AWS MediaConnect
+ 
+ - Allow bonding multiple network connections
+ 
+ - Adjusts encoder bitrate according to network conditions, when using libx264
+
 Quick Links
 -----------
 
