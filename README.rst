@@ -17,6 +17,11 @@ OBS Studio <https://obsproject.com>
    :alt: OBS Studio Discord Server
    :target: https://obsproject.com/discord
 
+
+All Changes in this repository are done under the zixi_features branch
+----------------------------------------------------------------------
+
+
 What is OBS Studio?
 -------------------
 
